@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 
 // Schema for structured exam reading
 const examExtractionSchema = {
@@ -51,22 +51,24 @@ export const config = {
 const waitMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Executes generateContent with exponential backoff for 503 High Demand / 429 rate limit errors
- * and falls back to 'gemini-flash-latest' if 'gemini-3.8-flash' is overloaded.
+ * Executes generateContent with low thinking latency and fast fallback to 'gemini-flash-latest'
  */
 async function callGeminiWithFallback(ai: GoogleGenAI, contents: any) {
   const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest'];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const response = await ai.models.generateContent({
           model,
           contents,
           config: {
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.LOW,
+            },
             systemInstruction:
-              'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente acurado ao ler nomes e números manuscritos ou impressos.',
+              'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente rápido e preciso ao ler o nome do aluno e a nota atribuída na prova.',
             responseMimeType: 'application/json',
             responseSchema: examExtractionSchema,
           },
@@ -82,16 +84,12 @@ async function callGeminiWithFallback(ai: GoogleGenAI, contents: any) {
           errMsg.includes('503') ||
           errMsg.includes('high demand') ||
           errMsg.includes('UNAVAILABLE') ||
-          errMsg.includes('429') ||
-          errMsg.includes('RESOURCE_EXHAUSTED');
+          errMsg.includes('429');
 
-        if (isTemporary && attempt < 3) {
-          // Wait 1.5s on attempt 1, 3s on attempt 2
-          console.warn(`[Gemini ${model}] Alta demanda temporária (503). Nova tentativa ${attempt + 1}/3 em ${attempt * 1500}ms...`);
-          await waitMs(attempt * 1500);
+        if (isTemporary && attempt < 2) {
+          await waitMs(600);
           continue;
         }
-        // If not temporary or ran out of attempts for this model, try next model in loop
         break;
       }
     }

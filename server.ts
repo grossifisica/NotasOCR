@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -84,14 +84,17 @@ async function callGeminiWithFallback(ai: GoogleGenAI, contents: any) {
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const response = await ai.models.generateContent({
           model,
           contents,
           config: {
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.LOW,
+            },
             systemInstruction:
-              'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente acurado ao ler nomes e números manuscritos ou impressos.',
+              'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente rápido e preciso ao ler o nome do aluno e a nota atribuída na prova.',
             responseMimeType: 'application/json',
             responseSchema: examExtractionSchema,
           },
@@ -107,12 +110,10 @@ async function callGeminiWithFallback(ai: GoogleGenAI, contents: any) {
           errMsg.includes('503') ||
           errMsg.includes('high demand') ||
           errMsg.includes('UNAVAILABLE') ||
-          errMsg.includes('429') ||
-          errMsg.includes('RESOURCE_EXHAUSTED');
+          errMsg.includes('429');
 
-        if (isTemporary && attempt < 3) {
-          console.warn(`[Gemini ${model}] 503 alta demanda temporária. Tentativa ${attempt + 1}/3 em ${attempt * 1500}ms...`);
-          await waitMs(attempt * 1500);
+        if (isTemporary && attempt < 2) {
+          await waitMs(600);
           continue;
         }
         break;

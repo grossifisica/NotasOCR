@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ScanQueueItem } from '../types';
 import { sampleExamsList, generateSampleExamImage, SampleExamConfig } from '../utils/sampleExams';
+import { compressImageFile } from '../utils/imageCompressor';
 
 interface GalleryPickerViewProps {
   queue: ScanQueueItem[];
@@ -43,8 +44,8 @@ export const GalleryPickerView: React.FC<GalleryPickerViewProps> = ({
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [showTips, setShowTips] = useState(false);
 
-  // Read files as Base64
-  const processFiles = (files: FileList | null) => {
+  // Compress and read files as optimized Base64 JPEGs (~100KB each)
+  const processFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     const fileArray = Array.from(files).filter((file) =>
@@ -53,21 +54,20 @@ export const GalleryPickerView: React.FC<GalleryPickerViewProps> = ({
 
     if (fileArray.length === 0) return;
 
-    const promises = fileArray.map((file) => {
-      return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    });
-
-    Promise.all(promises).then((base64Images) => {
-      onFilesSelected(base64Images);
+    try {
+      const promises = fileArray.map((file) => compressImageFile(file, 1000, 0.75));
+      const base64Images = await Promise.all(promises);
+      const validImages = base64Images.filter((img) => Boolean(img));
+      if (validImages.length > 0) {
+        onFilesSelected(validImages);
+      }
+    } catch (e) {
+      console.warn('Erro ao processar imagens:', e);
+    } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-    });
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
