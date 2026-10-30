@@ -80,24 +80,28 @@ app.get('/api/health', (_req: Request, res: Response) => {
 const waitMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function callGeminiWithFallback(ai: GoogleGenAI, contents: any) {
-  const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest'];
+  const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
+        const isLite = model.includes('lite');
+        const config: any = {
+          systemInstruction:
+            'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente rápido e preciso ao ler o nome do aluno e a nota atribuída na prova.',
+          responseMimeType: 'application/json',
+          responseSchema: examExtractionSchema,
+        };
+
+        if (!isLite) {
+          config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+        }
+
         const response = await ai.models.generateContent({
           model,
           contents,
-          config: {
-            thinkingConfig: {
-              thinkingLevel: ThinkingLevel.LOW,
-            },
-            systemInstruction:
-              'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente rápido e preciso ao ler o nome do aluno e a nota atribuída na prova.',
-            responseMimeType: 'application/json',
-            responseSchema: examExtractionSchema,
-          },
+          config,
         });
 
         if (response.text) {
@@ -113,7 +117,7 @@ async function callGeminiWithFallback(ai: GoogleGenAI, contents: any) {
           errMsg.includes('429');
 
         if (isTemporary && attempt < 2) {
-          await waitMs(600);
+          await waitMs(500);
           continue;
         }
         break;
