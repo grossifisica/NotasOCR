@@ -169,7 +169,13 @@ Retorne exclusivamente os dados no formato estruturado solicitado.
     };
 
     const text = await callGeminiWithFallback(ai, contents);
-    const parsed = JSON.parse(text);
+    let cleanJson = (text || '').trim();
+    if (cleanJson.startsWith('```json')) {
+      cleanJson = cleanJson.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+    } else if (cleanJson.startsWith('```')) {
+      cleanJson = cleanJson.replace(/^```\s*/, '').replace(/```\s*$/, '');
+    }
+    const parsed = JSON.parse(cleanJson);
     return res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Erro ao analisar prova com Gemini:', error);

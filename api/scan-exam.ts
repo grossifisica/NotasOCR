@@ -182,7 +182,13 @@ Retorne exclusivamente os dados no formato estruturado solicitado.
 
     // Execute with automatic retry and cluster fallback
     const rawJson = await callGeminiWithFallback(ai, contents);
-    const parsed = JSON.parse(rawJson);
+    let cleanJson = (rawJson || '').trim();
+    if (cleanJson.startsWith('```json')) {
+      cleanJson = cleanJson.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+    } else if (cleanJson.startsWith('```')) {
+      cleanJson = cleanJson.replace(/^```\s*/, '').replace(/```\s*$/, '');
+    }
+    const parsed = JSON.parse(cleanJson);
     return res.status(200).json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Erro na função serverless da Vercel:', error);
