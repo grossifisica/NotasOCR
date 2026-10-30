@@ -1,0 +1,6 @@
+{
+  "name": "Corretor & Leitor de Provas da Galeria",
+  "description": "Aplicativo mobile para selecionar fotos de provas escolares da galeria do celular, identificar nomes e notas automaticamente com inteligência artificial, organizar em tabela e exportar para CSV.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
