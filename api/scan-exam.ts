@@ -48,6 +48,58 @@ export const config = {
   },
 };
 
+const waitMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Executes generateContent with exponential backoff for 503 High Demand / 429 rate limit errors
+ * and falls back to 'gemini-flash-latest' if 'gemini-3.8-flash' is overloaded.
+ */
+async function callGeminiWithFallback(ai: GoogleGenAI, contents: any) {
+  const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest'];
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            systemInstruction:
+              'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente acurado ao ler nomes e números manuscritos ou impressos.',
+            responseMimeType: 'application/json',
+            responseSchema: examExtractionSchema,
+          },
+        });
+
+        if (response.text) {
+          return response.text;
+        }
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = String(err?.message || '');
+        const isTemporary =
+          errMsg.includes('503') ||
+          errMsg.includes('high demand') ||
+          errMsg.includes('UNAVAILABLE') ||
+          errMsg.includes('429') ||
+          errMsg.includes('RESOURCE_EXHAUSTED');
+
+        if (isTemporary && attempt < 3) {
+          // Wait 1.5s on attempt 1, 3s on attempt 2
+          console.warn(`[Gemini ${model}] Alta demanda temporária (503). Nova tentativa ${attempt + 1}/3 em ${attempt * 1500}ms...`);
+          await waitMs(attempt * 1500);
+          continue;
+        }
+        // If not temporary or ran out of attempts for this model, try next model in loop
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error('Os servidores de IA estão temporariamente indisponíveis.');
+}
+
 export default async function handler(req: any, res: any) {
   // Enable CORS if accessed from different origins
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -114,40 +166,37 @@ ${maxScoreDefault ? `Nota máxima padrão: ${maxScoreDefault}.` : ''}
 Retorne exclusivamente os dados no formato estruturado solicitado.
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType || 'image/jpeg',
-              data: base64Data,
-            },
+    const contents = {
+      parts: [
+        {
+          inlineData: {
+            mimeType: mimeType || 'image/jpeg',
+            data: base64Data,
           },
-          {
-            text: promptText,
-          },
-        ],
-      },
-      config: {
-        systemInstruction:
-          'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente acurado ao ler nomes e números manuscritos ou impressos.',
-        responseMimeType: 'application/json',
-        responseSchema: examExtractionSchema,
-      },
-    });
+        },
+        {
+          text: promptText,
+        },
+      ],
+    };
 
-    const text = response.text;
-    if (!text) {
-      throw new Error('Nenhuma resposta recebida do modelo.');
-    }
-
-    const parsed = JSON.parse(text);
+    // Execute with automatic retry and cluster fallback
+    const rawJson = await callGeminiWithFallback(ai, contents);
+    const parsed = JSON.parse(rawJson);
     return res.status(200).json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Erro na função serverless da Vercel:', error);
+    const msg = error?.message || '';
+
+    if (msg.includes('503') || msg.includes('high demand') || msg.includes('UNAVAILABLE')) {
+      return res.status(503).json({
+        error:
+          'Os servidores do Gemini estão com pico temporário de demanda mundial. O app tentou reconectar, mas o servidor ainda está congestionado. Aguarde alguns segundos e clique em Tentar Novamente.',
+      });
+    }
+
     return res.status(500).json({
-      error: error?.message || 'Erro interno ao processar a foto da prova.',
+      error: msg || 'Erro interno ao processar a foto da prova.',
     });
   }
 }

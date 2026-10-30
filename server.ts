@@ -77,6 +77,52 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', hasKey: !!process.env.GEMINI_API_KEY });
 });
 
+const waitMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callGeminiWithFallback(ai: GoogleGenAI, contents: any) {
+  const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest'];
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            systemInstruction:
+              'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente acurado ao ler nomes e números manuscritos ou impressos.',
+            responseMimeType: 'application/json',
+            responseSchema: examExtractionSchema,
+          },
+        });
+
+        if (response.text) {
+          return response.text;
+        }
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = String(err?.message || '');
+        const isTemporary =
+          errMsg.includes('503') ||
+          errMsg.includes('high demand') ||
+          errMsg.includes('UNAVAILABLE') ||
+          errMsg.includes('429') ||
+          errMsg.includes('RESOURCE_EXHAUSTED');
+
+        if (isTemporary && attempt < 3) {
+          console.warn(`[Gemini ${model}] 503 alta demanda temporária. Tentativa ${attempt + 1}/3 em ${attempt * 1500}ms...`);
+          await waitMs(attempt * 1500);
+          continue;
+        }
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error('Servidores de IA temporariamente indisponíveis.');
+}
+
 // Endpoint to scan a single exam picture
 app.post('/api/scan-exam', async (req: Request, res: Response) => {
   try {
@@ -108,39 +154,32 @@ ${maxScoreDefault ? `Nota máxima padrão: ${maxScoreDefault}.` : ''}
 Retorne exclusivamente os dados no formato estruturado solicitado.
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType || 'image/jpeg',
-              data: base64Data,
-            },
+    const contents = {
+      parts: [
+        {
+          inlineData: {
+            mimeType: mimeType || 'image/jpeg',
+            data: base64Data,
           },
-          {
-            text: promptText,
-          },
-        ],
-      },
-      config: {
-        systemInstruction: 'Você é um leitor óptico e analisador inteligente de provas escolares em português. Seja extremamente acurado ao ler nomes e números manuscritos ou impressos.',
-        responseMimeType: 'application/json',
-        responseSchema: examExtractionSchema,
-      },
-    });
+        },
+        {
+          text: promptText,
+        },
+      ],
+    };
 
-    const text = response.text;
-    if (!text) {
-      throw new Error('Nenhuma resposta recebida do modelo.');
-    }
-
+    const text = await callGeminiWithFallback(ai, contents);
     const parsed = JSON.parse(text);
     return res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Erro ao analisar prova com Gemini:', error);
     const errorMessage = error?.message || 'Erro desconhecido ao processar prova';
-    return res.status(500).json({ error: errorMessage });
+    const is503 = errorMessage.includes('503') || errorMessage.includes('high demand') || errorMessage.includes('UNAVAILABLE');
+    return res.status(is503 ? 503 : 500).json({ 
+      error: is503 
+        ? 'Os servidores do Gemini estão com alta demanda temporária. O aplicativo tentou reconectar automaticamente. Aguarde alguns instantes e tente novamente.' 
+        : errorMessage 
+    });
   }
 });
 

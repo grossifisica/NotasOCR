@@ -130,10 +130,14 @@ export default function App() {
         );
       } catch (err: any) {
         console.error('Falha ao processar foto da galeria:', err);
-        const errorMsg = err?.message || 'Falha ao processar foto';
+        let errorMsg = err?.message || 'Falha ao processar foto';
+
+        if (errorMsg.includes('503') || errorMsg.includes('high demand') || errorMsg.includes('demanda')) {
+          errorMsg = 'Os servidores do Google estão com pico temporário de demanda. Aguarde alguns segundos e clique em Tentar no item.';
+        }
 
         setLatestToast({
-          message: `Erro na análise: ${errorMsg}`,
+          message: errorMsg,
           type: 'error',
         });
 
