@@ -7,10 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Images, 
   Table, 
-  BarChart3, 
-  Settings as SettingsIcon, 
-  Download, 
-  Sparkles, 
+  Download,
   Smartphone, 
   Monitor, 
   CheckCircle2, 
@@ -21,10 +18,8 @@ import {
 } from 'lucide-react';
 import { GalleryPickerView } from './components/GalleryPickerView';
 import { TableView } from './components/TableView';
-import { StatsView } from './components/StatsView';
 import { ExportModal } from './components/ExportModal';
 import { EditExamModal } from './components/EditExamModal';
-import { SettingsModal } from './components/SettingsModal';
 import { ManualAddModal } from './components/ManualAddModal';
 
 import { ExamRecord, ScanQueueItem, AppSettings } from './types';
@@ -39,8 +34,8 @@ import { scanExamApi, playSuccessSound, triggerHaptic } from './services/api';
 import { sampleExamsList, generateSampleExamImage } from './utils/sampleExams';
 
 export default function App() {
-  // Navigation Tabs: Gallery Picker, Table, Stats
-  const [activeTab, setActiveTab] = useState<'gallery' | 'table' | 'stats'>('gallery');
+  // Navigation Tabs: Gallery Picker and Table
+  const [activeTab, setActiveTab] = useState<'gallery' | 'table'>('gallery');
   
   // App Data & Settings
   const [records, setRecords] = useState<ExamRecord[]>(() => loadExamRecords());
@@ -49,7 +44,6 @@ export default function App() {
   // Modals
   const [editingRecord, setEditingRecord] = useState<ExamRecord | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
 
   // Background Processing Queue for Gallery Photos
@@ -108,7 +102,11 @@ export default function App() {
           createdAt: Date.now(),
         };
 
-        setRecords((prev) => [newRecord, ...prev]);
+        setRecords((prev) =>
+          [...prev, newRecord].sort((a, b) =>
+            a.studentName.localeCompare(b.studentName, 'pt-BR', { sensitivity: 'base' })
+          )
+        );
 
         // Feedback sound & haptic
         if (settings.soundEnabled) {
@@ -202,7 +200,11 @@ export default function App() {
 
   // Update Record
   const handleSaveRecord = (updated: ExamRecord) => {
-    setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setRecords((prev) =>
+      prev
+        .map((r) => (r.id === updated.id ? updated : r))
+        .sort((a, b) => a.studentName.localeCompare(b.studentName, 'pt-BR', { sensitivity: 'base' }))
+    );
   };
 
   // Clear toast after 4s
@@ -277,20 +279,12 @@ export default function App() {
               <button
                 onClick={() => setIsExportOpen(true)}
                 className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-600/20 transition active:scale-95"
-                title="Exportar tabela para CSV"
+                title="Exportar Nome e Nota para CSV"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span className="hidden xs:inline">CSV</span>
               </button>
             )}
-
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800/60 transition"
-              title="Configurações de Notas"
-            >
-              <SettingsIcon className="w-4 h-4" />
-            </button>
           </div>
         </header>
 
@@ -351,22 +345,14 @@ export default function App() {
               onLoadSamples={handleLoadSamples}
             />
           )}
-
-          {activeTab === 'stats' && (
-            <StatsView
-              records={records}
-              settings={settings}
-              onOpenExport={() => setIsExportOpen(true)}
-            />
-          )}
         </main>
 
         {/* Mobile Thumb-Friendly Bottom Navigation Bar */}
-        <nav className="sticky bottom-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-4 py-2 flex items-center justify-around">
+        <nav className="sticky bottom-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-6 py-2 flex items-center justify-around">
           {/* Gallery Picker Tab */}
           <button
             onClick={() => setActiveTab('gallery')}
-            className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-2xl transition active:scale-90 ${
+            className={`flex flex-col items-center justify-center gap-1 py-1.5 px-4 rounded-2xl transition active:scale-90 ${
               activeTab === 'gallery'
                 ? 'text-indigo-400 font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -377,13 +363,13 @@ export default function App() {
             }`}>
               <Images className="w-5 h-5" />
             </div>
-            <span className="text-[10px]">Galeria</span>
+            <span className="text-[11px]">Galeria</span>
           </button>
 
           {/* Table Tab */}
           <button
             onClick={() => setActiveTab('table')}
-            className={`relative flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-2xl transition active:scale-90 ${
+            className={`relative flex flex-col items-center justify-center gap-1 py-1.5 px-4 rounded-2xl transition active:scale-90 ${
               activeTab === 'table'
                 ? 'text-indigo-400 font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -394,40 +380,12 @@ export default function App() {
             }`}>
               <Table className="w-5 h-5" />
             </div>
-            <span className="text-[10px]">Tabela</span>
+            <span className="text-[11px]">Tabela</span>
             {records.length > 0 && (
-              <span className="absolute top-1 right-2 w-4 h-4 rounded-full bg-indigo-600 text-[9px] font-mono text-white flex items-center justify-center font-bold">
+              <span className="absolute top-1 right-3 w-4 h-4 rounded-full bg-indigo-600 text-[9px] font-mono text-white flex items-center justify-center font-bold">
                 {records.length > 99 ? '99+' : records.length}
               </span>
             )}
-          </button>
-
-          {/* Stats Tab */}
-          <button
-            onClick={() => setActiveTab('stats')}
-            className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-2xl transition active:scale-90 ${
-              activeTab === 'stats'
-                ? 'text-indigo-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <div className={`p-1.5 rounded-xl transition ${
-              activeTab === 'stats' ? 'bg-indigo-600/20 text-indigo-400' : ''
-            }`}>
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <span className="text-[10px]">Métricas</span>
-          </button>
-
-          {/* Settings Tab */}
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-2xl text-slate-400 hover:text-slate-200 transition active:scale-90"
-          >
-            <div className="p-1.5 rounded-xl">
-              <SettingsIcon className="w-5 h-5" />
-            </div>
-            <span className="text-[10px]">Ajustes</span>
           </button>
         </nav>
       </div>
@@ -452,23 +410,15 @@ export default function App() {
         />
       )}
 
-      {isSettingsOpen && (
-        <SettingsModal
-          settings={settings}
-          onSave={(updated) => setSettings(updated)}
-          onClearAll={() => {
-            setRecords([]);
-            setLatestToast({ message: 'Todas as provas foram removidas.', type: 'info' });
-          }}
-          onClose={() => setIsSettingsOpen(false)}
-        />
-      )}
-
       {isManualAddOpen && (
         <ManualAddModal
           settings={settings}
           onAdd={(newRec) => {
-            setRecords((prev) => [newRec, ...prev]);
+            setRecords((prev) =>
+              [...prev, newRec].sort((a, b) =>
+                a.studentName.localeCompare(b.studentName, 'pt-BR', { sensitivity: 'base' })
+              )
+            );
             setLatestToast({
               message: `Aluno ${newRec.studentName} adicionado!`,
               type: 'success',

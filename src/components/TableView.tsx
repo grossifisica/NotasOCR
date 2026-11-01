@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Search, 
-  Filter, 
-  ArrowUpDown, 
   Download, 
   Copy, 
   Trash2, 
@@ -45,8 +43,8 @@ export const TableView: React.FC<TableViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'aprovado' | 'recuperacao' | 'reprovado'>('all');
   const [classroomFilter, setClassroomFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'name' | 'score' | 'date'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortBy, setSortBy] = useState<'name' | 'score'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [copiedFeedback, setCopiedFeedback] = useState(false);
 
@@ -59,7 +57,7 @@ export const TableView: React.FC<TableViewProps> = ({
     return Array.from(set);
   }, [records]);
 
-  // Filtered and sorted records
+  // Filtered and sorted records - Always alphabetically sorted by studentName
   const filteredRecords = useMemo(() => {
     return records
       .filter((rec) => {
@@ -85,14 +83,12 @@ export const TableView: React.FC<TableViewProps> = ({
         return true;
       })
       .sort((a, b) => {
-        let diff = 0;
-        if (sortBy === 'name') {
-          diff = a.studentName.localeCompare(b.studentName);
-        } else if (sortBy === 'score') {
-          diff = a.score - b.score;
-        } else {
-          diff = a.createdAt - b.createdAt;
+        if (sortBy === 'score') {
+          const diff = a.score - b.score;
+          return sortOrder === 'asc' ? diff : -diff;
         }
+        // Always default to alphabetical A-Z with Portuguese locale
+        const diff = a.studentName.localeCompare(b.studentName, 'pt-BR', { sensitivity: 'base' });
         return sortOrder === 'asc' ? diff : -diff;
       });
   }, [records, searchTerm, statusFilter, classroomFilter, sortBy, sortOrder, settings]);
@@ -137,16 +133,17 @@ export const TableView: React.FC<TableViewProps> = ({
             onClick={onOpenExport}
             disabled={records.length === 0}
             className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/20 transition active:scale-95"
+            title="Exportar arquivo CSV contendo apenas Nome do Aluno e Nota"
           >
             <Download className="w-4 h-4" />
-            <span>Exportar CSV</span>
+            <span>Exportar CSV (Nome e Nota)</span>
           </button>
 
           <button
             onClick={handleCopyTable}
             disabled={records.length === 0}
             className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 border border-slate-700 rounded-xl text-xs font-medium transition active:scale-95"
-            title="Copiar para colar no Excel ou Google Sheets"
+            title="Copiar Nome e Nota para colar no Excel ou Google Planilhas"
           >
             {copiedFeedback ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
             <span className="hidden xs:inline">{copiedFeedback ? 'Copiado!' : 'Copiar'}</span>
@@ -262,44 +259,9 @@ export const TableView: React.FC<TableViewProps> = ({
               </select>
             )}
 
-            <button
-              onClick={() => {
-                if (sortBy === 'score') {
-                  setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-                } else {
-                  setSortBy('score');
-                  setSortOrder('desc');
-                }
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border transition ${
-                sortBy === 'score'
-                  ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
-                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-              }`}
-              title="Ordenar por nota"
-            >
-              <ArrowUpDown className="w-3 h-3" />
-              <span>Nota {sortBy === 'score' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                if (sortBy === 'name') {
-                  setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-                } else {
-                  setSortBy('name');
-                  setSortOrder('asc');
-                }
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border transition ${
-                sortBy === 'name'
-                  ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
-                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-              }`}
-              title="Ordenar alfabeticamente"
-            >
-              <span>Nome {sortBy === 'name' ? (sortOrder === 'asc' ? 'A-Z' : 'Z-A') : ''}</span>
-            </button>
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 font-medium text-xs">
+              <span>Ordem Alfabética (A-Z)</span>
+            </div>
           </div>
         </div>
       </div>

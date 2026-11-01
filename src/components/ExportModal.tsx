@@ -83,8 +83,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-semibold text-white text-base">Exportar Tabela de Notas</h3>
-              <p className="text-xs text-slate-400">{records.length} aluno(s) registrados</p>
+              <h3 className="font-semibold text-white text-base">Exportar Nome e Nota (CSV)</h3>
+              <p className="text-xs text-slate-400">{records.length} aluno(s) • Colunas: Nome do Aluno e Nota</p>
             </div>
           </div>
           <button

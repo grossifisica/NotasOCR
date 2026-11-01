@@ -38,7 +38,10 @@ export function loadExamRecords(): ExamRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_EXAMS);
     if (raw) {
-      return JSON.parse(raw);
+      const list: ExamRecord[] = JSON.parse(raw);
+      return list.sort((a, b) =>
+        a.studentName.localeCompare(b.studentName, 'pt-BR', { sensitivity: 'base' })
+      );
     }
   } catch (e) {
     console.warn('Erro ao carregar provas:', e);

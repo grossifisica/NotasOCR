@@ -43,8 +43,10 @@ export const GalleryPickerView: React.FC<GalleryPickerViewProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizingProgress, setOptimizingProgress] = useState({ current: 0, total: 0 });
 
-  // Compress and read files as optimized Base64 JPEGs (~100KB each)
+  // Compress and read files in smooth batches of 4 to support 40+ images safely
   const processFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
@@ -54,16 +56,32 @@ export const GalleryPickerView: React.FC<GalleryPickerViewProps> = ({
 
     if (fileArray.length === 0) return;
 
+    setIsOptimizing(true);
+    setOptimizingProgress({ current: 0, total: fileArray.length });
+
     try {
-      const promises = fileArray.map((file) => compressImageFile(file, 1000, 0.75));
-      const base64Images = await Promise.all(promises);
-      const validImages = base64Images.filter((img) => Boolean(img));
-      if (validImages.length > 0) {
-        onFilesSelected(validImages);
+      const batchSize = 4;
+      const allCompressed: string[] = [];
+
+      for (let i = 0; i < fileArray.length; i += batchSize) {
+        const chunk = fileArray.slice(i, i + batchSize);
+        const chunkResults = await Promise.all(
+          chunk.map((file) => compressImageFile(file, 1000, 0.75))
+        );
+        allCompressed.push(...chunkResults.filter(Boolean));
+        setOptimizingProgress({
+          current: Math.min(i + batchSize, fileArray.length),
+          total: fileArray.length,
+        });
+      }
+
+      if (allCompressed.length > 0) {
+        onFilesSelected(allCompressed);
       }
     } catch (e) {
       console.warn('Erro ao processar imagens:', e);
     } finally {
+      setIsOptimizing(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -135,38 +153,55 @@ export const GalleryPickerView: React.FC<GalleryPickerViewProps> = ({
 
         <h2 className="text-base sm:text-lg font-bold text-white mb-1.5 flex items-center gap-2">
           <span>Selecionar Fotos da Galeria</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-normal">
-            Múltiplas Fotos
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+            Lote 40+ Fotos
           </span>
         </h2>
 
         <p className="text-xs sm:text-sm text-slate-300 max-w-sm mb-4">
-          Toque para abrir a galeria do seu celular e escolha uma ou várias fotos de provas de alunos.
+          Toque para abrir a galeria do seu celular e selecione 40, 50 ou quantas provas quiser de uma só vez.
         </p>
 
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/30 transition active:scale-95">
-            <Upload className="w-4 h-4" />
-            <span>Abrir Galeria do Celular</span>
-          </span>
+        {/* Optimizing files progress indicator */}
+        {isOptimizing ? (
+          <div className="w-full max-w-xs p-3.5 bg-indigo-950/80 border border-indigo-500/50 rounded-2xl flex flex-col items-center gap-2 animate-in fade-in">
+            <div className="flex items-center gap-2 text-xs font-semibold text-indigo-200">
+              <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+              <span>Preparando {optimizingProgress.total} fotos... ({optimizingProgress.current}/{optimizingProgress.total})</span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-indigo-500 transition-all duration-200"
+                style={{ width: `${(optimizingProgress.current / (optimizingProgress.total || 1)) * 100}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-slate-400">Comprimindo com segurança sem travar o celular</span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/30 transition active:scale-95">
+              <Upload className="w-4 h-4" />
+              <span>Abrir Galeria do Celular</span>
+            </span>
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowDemoModal(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-medium transition"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Provas de Exemplo</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDemoModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-medium transition"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Provas de Exemplo</span>
+            </button>
+          </div>
+        )}
 
         <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-center gap-4 text-[11px] text-slate-400">
-          <span>✓ JPEG, PNG, HEIC ou WebP</span>
+          <span>✓ Selecione 40+ fotos de uma vez</span>
           <span>•</span>
-          <span>✓ Seleção individual ou em lote</span>
+          <span>✓ JPEG, PNG, HEIC ou WebP</span>
         </div>
       </div>
 
